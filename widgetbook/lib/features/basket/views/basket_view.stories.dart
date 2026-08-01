@@ -23,9 +23,9 @@ final $Empty = _Story(
   ),
 );
 
-// A shared, mutable state so the card's add/remove buttons (which read
-// `BasketState.of(context)` from the [BasketScope] provided in `setup`)
-// update the same store that backs the `basket` arg below.
+// A shared, mutable state seeding the basket. The card's +/- buttons read
+// `BasketState.of(context)` from the [BasketScope] provided in `setup` and
+// mutate this state, notifying its listeners.
 final _basketState = BasketState(
   data: {
     DataStore.fruits[0]: ProductOrder(
@@ -50,9 +50,20 @@ final $NonEmpty = _Story(
     state: _basketState,
     child: child,
   ),
+  // Derive the view's inputs from the live [BasketState] on every build (rather
+  // than from static args). Reading `BasketState.of(context)` here registers a
+  // build-time dependency on the [BasketScope], so tapping a card's +/- buttons
+  // notifies the scope, rebuilds this builder, and recomputes the subtotal and
+  // total. `_Args.basket` is required by the generated args but unused here.
+  builder: (context, args) {
+    final state = BasketState.of(context);
+    return BasketView(
+      basket: state.store,
+      delivery: state.delivery,
+      subTotal: state.subTotal,
+    );
+  },
   args: _Args(
     basket: Arg.fixed(_basketState.store),
-    delivery: DoubleArg(_basketState.delivery),
-    subTotal: DoubleArg(_basketState.subTotal),
   ),
 );
