@@ -45,7 +45,9 @@ final config = Config(
       IosViewports.iPad,
     ]),
     LocaleAddon(
-      AppLocalizations.supportedLocales,
+      // The first locale is the initial one; list English first to preserve
+      // v3's default (which used `supportedLocales.last`, i.e. English).
+      const [Locale('en'), Locale('de')],
       AppLocalizations.localizationsDelegates,
     ),
     ThemeAddon<AppThemeData>(
