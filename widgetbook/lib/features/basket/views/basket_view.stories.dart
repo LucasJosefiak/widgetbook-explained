@@ -1,4 +1,3 @@
-import 'package:flutter/widgets.dart';
 import 'package:groceries_app/features/features.dart';
 import 'package:groceries_app/repositories/data_store.dart';
 import 'package:groceries_app/repositories/fruit.dart';
@@ -6,7 +5,32 @@ import 'package:widgetbook/widgetbook.dart';
 
 part 'basket_view.stories.g.dart';
 
-const meta = Meta(BasketView.new);
+// BasketView's constructor takes a derived `basket`/`delivery`/`subTotal`, which
+// don't map to useful knobs. Custom args expose per-fruit quantities instead
+// (as v3 did), and the builder derives the view from a live [BasketState].
+const meta = Meta(BasketView.new, argsType: BasketInput.new);
+
+final defaults = _Defaults(
+  // Seed a fresh [BasketState] from the quantity knobs and expose it via a
+  // [BasketScope]. Setup only re-runs when args change (e.g. a knob), so the
+  // card's +/- buttons can mutate this same state and have their changes
+  // persist until the next knob change — matching v3.
+  setup: (context, child, args) => BasketScope(
+    state: _basketFrom(args.mangoQuantity, args.avocadoQuantity),
+    child: child,
+  ),
+  // Derive the view's inputs from the live state on every build. Reading
+  // `BasketState.of(context)` here makes the builder rebuild on +/- taps, so
+  // the subtotal and total stay in sync with the quantities.
+  builder: (context, args) {
+    final state = BasketState.of(context);
+    return BasketView(
+      basket: state.store,
+      delivery: state.delivery,
+      subTotal: state.subTotal,
+    );
+  },
+);
 
 final $Empty = _Story(
   name: 'Empty',
@@ -17,26 +41,9 @@ final $Empty = _Story(
   // `flutter test` treats as an error. Renders fine in the interactive app.
   excludeFromTests: true,
   args: _Args(
-    basket: Arg.fixed(const <Fruit, ProductOrder>{}),
-    delivery: DoubleArg(0),
-    subTotal: DoubleArg(0),
+    mangoQuantity: IntArg(0),
+    avocadoQuantity: IntArg(0),
   ),
-);
-
-// A shared, mutable state seeding the basket. The card's +/- buttons read
-// `BasketState.of(context)` from the [BasketScope] provided in `setup` and
-// mutate this state, notifying its listeners.
-final _basketState = BasketState(
-  data: {
-    DataStore.fruits[0]: ProductOrder(
-      fruit: DataStore.fruits[0],
-      quantity: 1,
-    ),
-    DataStore.fruits[1]: ProductOrder(
-      fruit: DataStore.fruits[1],
-      quantity: 2,
-    ),
-  },
 );
 
 final $NonEmpty = _Story(
@@ -46,24 +53,32 @@ final $NonEmpty = _Story(
   // Renders BasketCards whose fruit images load from remote URLs, which cannot
   // be loaded under `flutter test`. It still renders in the interactive app.
   excludeFromTests: true,
-  setup: (context, child, args) => BasketScope(
-    state: _basketState,
-    child: child,
-  ),
-  // Derive the view's inputs from the live [BasketState] on every build (rather
-  // than from static args). Reading `BasketState.of(context)` here registers a
-  // build-time dependency on the [BasketScope], so tapping a card's +/- buttons
-  // notifies the scope, rebuilds this builder, and recomputes the subtotal and
-  // total. `_Args.basket` is required by the generated args but unused here.
-  builder: (context, args) {
-    final state = BasketState.of(context);
-    return BasketView(
-      basket: state.store,
-      delivery: state.delivery,
-      subTotal: state.subTotal,
-    );
-  },
   args: _Args(
-    basket: Arg.fixed(_basketState.store),
+    mangoQuantity: IntArg(1),
+    avocadoQuantity: IntArg(2),
   ),
 );
+
+/// Custom args exposing an editable quantity per fruit.
+class BasketInput {
+  BasketInput({
+    required this.mangoQuantity,
+    required this.avocadoQuantity,
+  });
+
+  final int mangoQuantity;
+  final int avocadoQuantity;
+}
+
+BasketState _basketFrom(int mangoQuantity, int avocadoQuantity) {
+  final mango = DataStore.fruits[0];
+  final avocado = DataStore.fruits[1];
+  return BasketState(
+    data: <Fruit, ProductOrder>{
+      if (mangoQuantity > 0)
+        mango: ProductOrder(fruit: mango, quantity: mangoQuantity),
+      if (avocadoQuantity > 0)
+        avocado: ProductOrder(fruit: avocado, quantity: avocadoQuantity),
+    },
+  );
+}
